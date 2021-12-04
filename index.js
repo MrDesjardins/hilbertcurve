@@ -1,12 +1,79 @@
+class Hilbert {
+  constructor(order, canvasSize = 512) {
+    this.order = order;
+    this.canvasSize = canvasSize;
+  }
+
+  indexToPoint(index) {
+    let order = this.order;
+    const n = 2 ** order;
+    const point = { x: 0, y: 0 };
+    let rx, ry, s;
+    for (let s = 1, t = index; s < n; s *= 2) {
+      rx = 1 & (t / 2);
+      ry = 1 & (t ^ rx);
+      this.rotate(point, rx, ry, s);
+      point.x += s * rx;
+      point.y += s * ry;
+      t /= 4;
+    }
+    return point;
+  }
+
+  pointToIndex(point) {
+    let order = this.order;
+    const n = 2 ** order;
+    let rx,
+      ry,
+      index = 0;
+    for (let s = n / 2; s > 0; s = Math.floor(s / 2)) {
+      rx = (point.x & s) > 0 ? 1 : 0;
+      ry = (point.y & s) > 0 ? 1 : 0;
+      index += s * s * ((3 * rx) ^ ry);
+      this.rotate(point, rx, ry, n);
+    }
+    return index;
+  }
+
+  rotate(point, rx, ry, n) {
+    if (ry !== 0) {
+      return;
+    }
+    if (rx === 1) {
+      point.x = n - 1 - point.x;
+      point.y = n - 1 - point.y;
+    }
+    [point.x, point.y] = [point.y, point.x];
+  }
+
+  offsetPoint(point) {
+    let numberOfRows = Math.pow(2, this.order);
+    let len = width / numberOfRows; // Len of each edge between vertex of each cell (1 cell has 4 vertex)
+    return {
+      x: point.x * len + len / 2,
+      y: point.y * len + len / 2,
+    };
+  }
+
+  deoffsetPoint(point) {
+    let numberOfRows = Math.pow(2, this.order);
+    let len = width / numberOfRows; // Len of each edge between vertex of each cell (1 cell has 4 vertex)
+    return {
+      x: Math.trunc(point.x / len),
+      y: Math.trunc(point.y / len),
+    };
+  }
+}
+
 // Canvas configuration
-const width = 512;
+const width = 1024;
 const c = document.getElementById("myCanvas");
-c.width = 512;
+c.width = width;
 c.height = c.width;
 const ctx = c.getContext("2d");
 
 // Hilbert configuration
-const order = 3; // Should be a value between 1 and 6ish
+const order = 7; // Should be a value between 1 and 6ish
 
 // Computation from the order configured above
 let numberOfRows = Math.pow(2, order);
@@ -19,19 +86,33 @@ console.log("Number of rows : " + numberOfRows);
 console.log("Number of quadrant : " + totalVertex / 4);
 console.log("Number of vertex : " + totalVertex);
 
-for (let i = 0; i < totalVertex; i++) {
-  vertexCoordinate[i] = hilbert(i); // 1d to 2d
-  console.log(vertexCoordinate[i]);
-  // Visual alignment in the canvas for the 2d coordinate
-  vertexCoordinate[i].x *= len;
-  vertexCoordinate[i].y *= len;
+const h = new Hilbert(order, width);
 
-  // Visual offset in the canvas for the 2d coordinate (to be in the center of a cell)
-  vertexCoordinate[i].x += len / 2;
-  vertexCoordinate[i].y += len / 2;
+for (let i = 0; i < totalVertex; i++) {
+  vertexCoordinate[i] = h.indexToPoint(i); // 1d to 2d
+
+  // console.log("Raw:", vertexCoordinate[i]);
+  vertexCoordinate[i] = h.offsetPoint(vertexCoordinate[i]);
+  // console.log("Offset:", vertexCoordinate[i]);
 }
 
+console.log("Drawing");
 draw();
+console.log("End drawing");
+let debouncing = false;
+document.getElementById("myCanvas").addEventListener("mousemove", function (e) {
+  if (!debouncing) {
+    debouncing = true;
+    setTimeout(function () {
+      const x = e.clientX;
+      const y = e.clientY;
+
+      console.log(h.deoffsetPoint({ x: x, y: y }));
+      console.log(h.pointToIndex(h.deoffsetPoint({ x: x, y: y })));
+      debouncing = false;
+    }, 200);
+  }
+});
 
 function draw() {
   ctx.clearRect(0, 0, c.width, c.height);
@@ -61,65 +142,28 @@ function draw() {
   ctx.stroke();
 
   // Dot
-  for (let i = 1; i < totalVertex; i++) {
-    ctx.beginPath();
-    ctx.arc(
-      vertexCoordinate[i].x,
-      vertexCoordinate[i].y,
-      3,
-      0,
-      2 * Math.PI,
-      false
-    );
-    ctx.fillStyle = "rgba(250, 105, 255, 0.7)";
-    ctx.fill();
+  if (order < 8) {
+    for (let i = 0; i < totalVertex; i++) {
+      ctx.beginPath();
+      ctx.arc(
+        vertexCoordinate[i].x,
+        vertexCoordinate[i].y,
+        3,
+        0,
+        2 * Math.PI,
+        false
+      );
+      ctx.fillStyle = "rgba(250, 105, 255, 0.7)";
+      ctx.fill();
+    }
   }
 
   // Text
-  ctx.beginPath();
-  ctx.fillStyle = "black";
-  for (let i = 0; i < vertexCoordinate.length; i++) {
-    ctx.fillText(i, vertexCoordinate[i].x + 5, vertexCoordinate[i].y + 5); // Offset the text a little bit from the vertex
-  }
-}
-
-function hilbert(i) {
-  // Default Order 1 "U" shape
-  // | 0 | 3 |
-  // | 1 | 2 |
-  const points = [
-    { x: 0, y: 0 },
-    { x: 0, y: 1 },
-    { x: 1, y: 1 },
-    { x: 1, y: 0 },
-  ];
-
-  let index = i & 3; // Extract the 2 digits at the most right side (that will always be between 0 and 3 because possible values are: 00, 01, 10, 11
-  let vertex = points[index]; // Select the vertex in the possible 4 points
-  // Loop all orders
-  for (let j = 1; j < order; j++) {
-    i = i >>> 2; // Shift the two most right bits to get the next quadrant of 4 points
-    index = i & 3; // Give the index in the 1d array: 0,1,2,3 = index 0; 4,5,6,7 = index = 1, etc.
-    const len = Math.pow(2, j); // Move between quadrant
-
-    // Perform a rotation depending of the index that will loop between 0 and 3
-    if (index === 0) {
-      // Flip top-left
-      let temp = vertex.x;
-      vertex.x = vertex.y;
-      vertex.y = temp;
-    } else if (index === 1) {
-      vertex.y += len;
-    } else if (index === 2) {
-      vertex.x += len;
-      vertex.y += len;
-    } else if (index === 3) {
-      // Flip top-right
-      let temp = len - 1 - vertex.x;
-      vertex.x = len - 1 - vertex.y;
-      vertex.y = temp;
-      vertex.x += len;
+  if (order < 5) {
+    ctx.beginPath();
+    ctx.fillStyle = "black";
+    for (let i = 0; i < vertexCoordinate.length; i++) {
+      ctx.fillText(i, vertexCoordinate[i].x + 5, vertexCoordinate[i].y + 5); // Offset the text a little bit from the vertex
     }
   }
-  return vertex;
 }
