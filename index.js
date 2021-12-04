@@ -5,10 +5,10 @@ class Hilbert {
   }
 
   indexToPoint(index) {
-    let order = this.order;
-    const n = 2 ** order;
+    const n = 2 ** this.order;
     const point = { x: 0, y: 0 };
-    let rx, ry, s;
+    let rx;
+    let ry;
     for (let s = 1, t = index; s < n; s *= 2) {
       rx = 1 & (t / 2);
       ry = 1 & (t ^ rx);
@@ -21,11 +21,10 @@ class Hilbert {
   }
 
   pointToIndex(point) {
-    let order = this.order;
-    const n = 2 ** order;
-    let rx,
-      ry,
-      index = 0;
+    const n = 2 ** this.order;
+    let rx;
+    let ry;
+    let index = 0;
     for (let s = n / 2; s > 0; s = Math.floor(s / 2)) {
       rx = (point.x & s) > 0 ? 1 : 0;
       ry = (point.y & s) > 0 ? 1 : 0;
@@ -73,7 +72,7 @@ c.height = c.width;
 const ctx = c.getContext("2d");
 
 // Hilbert configuration
-const order = 7; // Should be a value between 1 and 6ish
+const order = 10; // Should be a value between 1 and 10; otherwise too slow to process
 
 // Computation from the order configured above
 let numberOfRows = Math.pow(2, order);
